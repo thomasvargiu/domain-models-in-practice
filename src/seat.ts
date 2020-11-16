@@ -22,6 +22,10 @@ export class Seat {
     this.col = col
   }
 
+  equals(obj: Seat): boolean {
+    return this.row === obj.row && this.col === obj.col
+  }
+
   toString() {
     return `${this.row}-${this.col}`
   }
@@ -55,27 +59,59 @@ export class ReserveSeat {
   }
 }
 
+export class EventStore {
+  events: Object[]
+
+  constructor(events: Object[]) {
+    this.events = events
+  }
+
+  byScreenId(screenId: ScreenId) {
+    return this.events
+  }
+}
+
 // Command Handler
 export class ReserveSeatHandler {
-  private reservations: Reservations
-  constructor(reservations: Reservations) {
-    this.reservations = reservations
+  private eventStore: EventStore
+  private publish: (event: Object) => void
+
+  constructor(eventStore: EventStore, publish: (event: Object) => void) {
+    this.eventStore = eventStore
+    this.publish = publish
   }
 
   handleCommand(reserveSeat: ReserveSeat) {
     const customerId = new CustomerId(reserveSeat.customerId)
     const screenId = new ScreenId(reserveSeat.screenId)
     const seat = new Seat(reserveSeat.row, reserveSeat.col)
-    const reservation = new Reservation(customerId, screenId, seat)
 
-    this.reservations.save(reservation)
+    const events = this.eventStore.byScreenId(screenId)
+    const reservationState = new ReservationState(events)
+
+    const reservation = new Reservation(reservationState, this.publish)
+
+    reservation.reserveSeat(customerId, screenId, seat)
 
     return "OK"
   }
 }
 
-// Aggregate
-export class Reservation {
+export interface DomainEvent {}
+
+// Event
+export class SeatReserved implements DomainEvent {
+  readonly customerId: CustomerId
+  readonly screenId: ScreenId
+  readonly seat: Seat
+
+  constructor(customerId: CustomerId, screenId: ScreenId, seat: Seat) {
+    this.customerId = customerId
+    this.screenId = screenId
+    this.seat = seat
+  }
+}
+export class SeatReservationRefused implements DomainEvent {
   readonly customerId: CustomerId
   readonly screenId: ScreenId
   readonly seat: Seat
@@ -87,9 +123,36 @@ export class Reservation {
   }
 }
 
-// Repository
-export class Reservations {
-  save(reservation: Reservation) {
-    return true
+export class ReservationState {
+  reservedSeat: Seat[] = []
+
+  constructor(events: Object[]) {
+    for (const event of events) {
+      this.apply(event as SeatReserved)
+    }
+  }
+
+  apply(event: SeatReserved) {
+    this.reservedSeat.push(event.seat)
+  }
+
+  isAvailable(seat: Seat) {
+    return !this.reservedSeat.find((s) => s.equals(seat))
+  }
+}
+
+// Aggregate
+export class Reservation {
+  reservationState: ReservationState
+  publish: (event: Object) => void
+
+  constructor(reservationState: ReservationState, publish: (event: Object) => void) {
+    this.reservationState = reservationState
+    this.publish = publish
+  }
+
+  reserveSeat(customerId: CustomerId, screenId: ScreenId, seat: Seat) {
+    if (this.reservationState.isAvailable(seat)) this.publish(new SeatReserved(customerId, screenId, seat))
+    else this.publish(new SeatReservationRefused(customerId, screenId, seat))
   }
 }
