@@ -36,15 +36,19 @@ export class CustomerId {
   constructor(id: string) {
     this.id = id
   }
+
+  value(): string {
+    return this.id;
+  }
 }
 export class Screen {
-    readonly screenId: ScreenId;
-    readonly startTime: Date;
+  readonly screenId: ScreenId;
+  readonly startTime: Date;
 
-    constructor(screenId: ScreenId, startTime: Date) {
-        this.screenId = screenId;
-        this.startTime = startTime
-    }
+  constructor(screenId: ScreenId, startTime: Date) {
+    this.screenId = screenId;
+    this.startTime = startTime
+  }
 }
 export class ScreenId {
   private readonly id: string
@@ -52,9 +56,14 @@ export class ScreenId {
   constructor(id: string) {
     this.id = id
   }
+
+  value(): string {
+    return this.id;
+  }
 }
 // Command
-export class ReserveSeat {
+export interface Command { }
+export class ReserveSeat implements Command {
   readonly customerId: string
   readonly screenId: string
   readonly row: Row
@@ -69,30 +78,34 @@ export class ReserveSeat {
 }
 
 export class EventStore {
-  events: Object[]
+  events: DomainEvent[]
 
-  constructor(events: Object[] = []) {
+  constructor(events: DomainEvent[] = []) {
     this.events = events
   }
 
-  byScreenId(screenId: ScreenId) {
+  byScreenId(_screenId: ScreenId) {
     return this.events
   }
 }
 
 export class ScreenRepository {
-    readonly screen: Screen;
-    constructor(screen: Screen) {
-        this.screen = screen;
-    }
-    
-    find(id: ScreenId) {
-        return this.screen;
-    }
+  readonly screen: Screen;
+  constructor(screen: Screen) {
+    this.screen = screen;
+  }
+
+  find(_id: ScreenId) {
+    return this.screen;
+  }
+}
+
+export interface CommandHandler<T extends Command> {
+  handleCommand(command: T): void;
 }
 
 // Command Handler
-export class ReserveSeatHandler {
+export class ReserveSeatHandler implements CommandHandler<ReserveSeat> {
   private eventStore: EventStore
   private screenRepository: ScreenRepository;
   private publish: (event: Object) => void
@@ -103,10 +116,10 @@ export class ReserveSeatHandler {
     this.publish = publish
   }
 
-  handleCommand(reserveSeat: ReserveSeat) {
-    const customerId = new CustomerId(reserveSeat.customerId)
-    const screenId = new ScreenId(reserveSeat.screenId)
-    const seat = new Seat(reserveSeat.row, reserveSeat.col)
+  handleCommand(command: ReserveSeat): void {
+    const customerId = new CustomerId(command.customerId)
+    const screenId = new ScreenId(command.screenId)
+    const seat = new Seat(command.row, command.col)
     const screen = this.screenRepository.find(screenId)
 
     const events = this.eventStore.byScreenId(screenId)
@@ -115,12 +128,10 @@ export class ReserveSeatHandler {
     const reservation = new Reservation(reservationState, this.publish)
 
     reservation.reserveSeat(customerId, screenId, seat)
-
-    return "OK"
   }
 }
 
-export interface DomainEvent {}
+export interface DomainEvent { }
 
 // Event
 export class SeatReserved implements DomainEvent {
@@ -150,15 +161,17 @@ export class ReservationState {
   reservedSeat: Seat[] = []
   screen: Screen
 
-  constructor(events: Object[], screen: Screen) {
+  constructor(events: DomainEvent[], screen: Screen) {
     this.screen = screen
     for (const event of events) {
-        this.apply(event as SeatReserved)
+      this.apply(event)
     }
   }
 
-  apply(event: SeatReserved) {
-    this.reservedSeat.push(event.seat)
+  apply(event: DomainEvent) {
+    if (event instanceof SeatReserved) {
+      this.reservedSeat.push(event.seat)
+    }
   }
 }
 
@@ -172,17 +185,17 @@ export class Reservation {
     this.publish = publish
   }
 
-    isOnTime() {
-        return this.reservationState.screen.startTime > new Date((new Date()).getTime() - (15 * 60 * 1000));
-    }
+  isOnTime() {
+    return this.reservationState.screen.startTime > new Date((new Date()).getTime() - (15 * 60 * 1000));
+  }
 
-    isAvailable(seat: Seat) {
-        return !this.reservationState.reservedSeat.find((s) => s.equals(seat))
-    }
+  isAvailable(seat: Seat) {
+    return !this.reservationState.reservedSeat.find((s) => s.equals(seat))
+  }
 
-    canBook(seat: Seat) {
-        return this.isOnTime() && this.isAvailable(seat);
-    }
+  canBook(seat: Seat) {
+    return this.isOnTime() && this.isAvailable(seat);
+  }
 
   reserveSeat(customerId: CustomerId, screenId: ScreenId, seat: Seat) {
     if (this.canBook(seat)) this.publish(new SeatReserved(customerId, screenId, seat))
