@@ -60,6 +60,10 @@ export class ScreenId {
   value(): string {
     return this.id;
   }
+
+  equals(obj: ScreenId): boolean {
+    return this.id === obj.id
+  }
 }
 // Command
 export interface Command { }
@@ -84,19 +88,11 @@ export class EventStore {
     this.events = events
   }
 
-  byScreenId(_screenId: ScreenId) {
-    return this.events
-  }
-}
-
-export class ScreenRepository {
-  readonly screen: Screen;
-  constructor(screen: Screen) {
-    this.screen = screen;
-  }
-
-  find(_id: ScreenId) {
-    return this.screen;
+  byScreenId(screenId: ScreenId) {
+    return this.events.filter(e => 
+        (e instanceof ScreenScheduled && e.screenId.equals(screenId)) ||
+        (e instanceof SeatReserved && e.screenId.equals(screenId)) ||
+        (e instanceof SeatReservationRefused && e.screenId.equals(screenId)))
   }
 }
 
@@ -107,12 +103,10 @@ export interface CommandHandler<T extends Command> {
 // Command Handler
 export class ReserveSeatHandler implements CommandHandler<ReserveSeat> {
   private eventStore: EventStore
-  private screenRepository: ScreenRepository;
   private publish: (event: Object) => void
 
-  constructor(eventStore: EventStore, screenRepository: ScreenRepository, publish: (event: Object) => void) {
+  constructor(eventStore: EventStore, publish: (event: Object) => void) {
     this.eventStore = eventStore
-    this.screenRepository = screenRepository
     this.publish = publish
   }
 
@@ -120,10 +114,9 @@ export class ReserveSeatHandler implements CommandHandler<ReserveSeat> {
     const customerId = new CustomerId(command.customerId)
     const screenId = new ScreenId(command.screenId)
     const seat = new Seat(command.row, command.col)
-    const screen = this.screenRepository.find(screenId)
 
     const events = this.eventStore.byScreenId(screenId)
-    const reservationState = new ReservationState(events, screen)
+    const reservationState = new ReservationState(events)
 
     const reservation = new Reservation(reservationState, this.publish)
 
@@ -157,18 +150,31 @@ export class SeatReservationRefused implements DomainEvent {
   }
 }
 
+export class ScreenScheduled implements DomainEvent {
+  readonly screenId: ScreenId
+  readonly startTime: Date
+
+  constructor(screenId: ScreenId, startTime: Date) {
+    this.screenId = screenId
+    this.startTime = startTime
+  }
+}
+
 export class ReservationState {
   reservedSeat: Seat[] = []
-  screen: Screen
+  screen: Screen | undefined
 
-  constructor(events: DomainEvent[], screen: Screen) {
-    this.screen = screen
+  constructor(events: DomainEvent[]) {
     for (const event of events) {
       this.apply(event)
     }
   }
 
   apply(event: DomainEvent) {
+    if (event instanceof ScreenScheduled) {
+      this.screen = new Screen(event.screenId, event.startTime)
+    }
+
     if (event instanceof SeatReserved) {
       this.reservedSeat.push(event.seat)
     }
@@ -186,7 +192,8 @@ export class Reservation {
   }
 
   isOnTime() {
-    return this.reservationState.screen.startTime > new Date((new Date()).getTime() - (15 * 60 * 1000));
+    let screen = this.reservationState.screen;
+    return screen && screen.startTime > new Date((new Date()).getTime() - (15 * 60 * 1000));
   }
 
   isAvailable(seat: Seat) {
