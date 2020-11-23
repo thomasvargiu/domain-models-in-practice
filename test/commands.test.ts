@@ -1,18 +1,32 @@
 import {
-  ReserveSeat,
-  ReserveSeatHandler,
   Row,
   Col,
-  EventStore,
-  SeatReserved,
   Seat,
   CustomerId,
   ScreenId,
-  SeatReservationRefused,
-  ScreenScheduled,
   Screen,
-} from "../../src/seat"
-import { createFramework } from "../framework"
+} from "../src/domain/domain"
+
+import {
+  SeatReserved,
+  SeatReservationRefused,
+  ScreenScheduled
+} from "../src/domain/events"
+
+import {
+  ReserveSeat
+} from "../src/domain/commands"
+
+import {
+  ReserveSeatHandler
+} from "../src/infrastructure/command_handlers"
+
+import {
+  EventStore
+} from "../src/infrastructure/event_store"
+
+
+import { createFramework } from "./framework"
 
 const framework = () => createFramework(
   (history, publish) => new ReserveSeatHandler(new EventStore(history), publish)

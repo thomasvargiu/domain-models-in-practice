@@ -1,5 +1,7 @@
 import { expect } from "chai";
-import { Command, CommandHandler, DomainEvent } from "../src/seat";
+import { DomainEvent } from "../src/domain/events";
+import { Command } from "../src/domain/commands";
+import { CommandHandler } from "../src/infrastructure/command_handlers";
 
 type Publish = (event: DomainEvent) => void;
 type HandlerFactory<T> = (history: DomainEvent[], publish: Publish) => CommandHandler<T>
