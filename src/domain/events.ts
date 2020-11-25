@@ -1,4 +1,4 @@
-import { CustomerId, ScreenId, Seat } from "./domain"
+import { ScreenId, Seat, CustomerId } from "./domain"
 
 export interface DomainEvent { }
 
@@ -14,6 +14,7 @@ export class SeatReserved implements DomainEvent {
     this.seat = seat
   }
 }
+
 export class SeatReservationRefused implements DomainEvent {
   readonly customerId: CustomerId
   readonly screenId: ScreenId
@@ -29,9 +30,11 @@ export class SeatReservationRefused implements DomainEvent {
 export class ScreenScheduled implements DomainEvent {
   readonly screenId: ScreenId
   readonly startTime: Date
+  readonly seats: Seat[]
 
-  constructor(screenId: ScreenId, startTime: Date) {
+  constructor(screenId: ScreenId, startTime: Date, seats: Seat[]) {
     this.screenId = screenId
     this.startTime = startTime
+    this.seats = seats
   }
 }

@@ -28,7 +28,11 @@ export const createFramework: FrameworkFactory = <T>(handlerFactory: HandlerFact
       handler.handleCommand(command)
     },
     thenExpect(events: DomainEvent[]) {
-      expect(publishedEvents).to.be.eql(events)
+      publishedEvents.forEach((_el, idx) => {
+        expect(publishedEvents[idx].constructor).to.be.eql(events[idx].constructor)  
+        expect(publishedEvents[idx]).to.be.eql(events[idx])  
+        
+      })
     }
   }
 }

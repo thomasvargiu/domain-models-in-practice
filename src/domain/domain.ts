@@ -32,6 +32,7 @@ export class Seat {
     return `${this.row}-${this.col}`
   }
 }
+
 export class CustomerId {
   private readonly id: string
 
@@ -42,16 +43,12 @@ export class CustomerId {
   value(): string {
     return this.id;
   }
-}
-export class Screen {
-  readonly screenId: ScreenId;
-  readonly startTime: Date;
 
-  constructor(screenId: ScreenId, startTime: Date) {
-    this.screenId = screenId;
-    this.startTime = startTime
+  equals(obj: CustomerId): boolean {
+    return this.id === obj.id
   }
 }
+
 export class ScreenId {
   private readonly id: string
 
@@ -68,10 +65,22 @@ export class ScreenId {
   }
 }
 
+export class Screen {
+  readonly screenId: ScreenId;
+  readonly startTime: Date;
+  readonly seats: Seat[];
+
+  constructor(screenId: ScreenId, startTime: Date, seats: Seat[]) {
+    this.screenId = screenId;
+    this.startTime = startTime
+    this.seats = seats
+  }
+}
+
 // Aggregate state
 export class ReservationState {
-  reservedSeat: Seat[] = []
-  screen: Screen | undefined
+  reservedSeats: Seat[] = []
+  screen?: Screen
 
   constructor(events: DomainEvent[]) {
     for (const event of events) {
@@ -81,11 +90,11 @@ export class ReservationState {
 
   apply(event: DomainEvent) {
     if (event instanceof ScreenScheduled) {
-      this.screen = new Screen(event.screenId, event.startTime)
+      this.screen = new Screen(event.screenId, event.startTime, event.seats)
     }
 
     if (event instanceof SeatReserved) {
-      this.reservedSeat.push(event.seat)
+      this.reservedSeats.push(event.seat)
     }
   }
 }
@@ -102,15 +111,17 @@ export class Reservation {
 
   isOnTime() {
     let screen = this.reservationState.screen;
-    return screen && screen.startTime > new Date((new Date()).getTime() - (15 * 60 * 1000));
+    return screen && screen.startTime > new Date((new Date()).getTime() + (15 * 60 * 1000))
   }
 
   isAvailable(seat: Seat) {
-    return !this.reservationState.reservedSeat.find((s) => s.equals(seat))
+    return !this.reservationState.reservedSeats.find((s) => s.equals(seat)) && 
+      this.reservationState.screen?.seats.find((s) => s.equals(seat)) 
+      
   }
 
   canBook(seat: Seat) {
-    return this.isOnTime() && this.isAvailable(seat);
+    return this.isOnTime() && this.isAvailable(seat)
   }
 
   reserveSeat(customerId: CustomerId, screenId: ScreenId, seat: Seat) {
@@ -118,3 +129,42 @@ export class Reservation {
     else this.publish(new SeatReservationRefused(customerId, screenId, seat))
   }
 }
+
+// Read Model
+export class AvailableSeatsByScreen {
+
+  public availableSeats: Map<ScreenId, Seat[]> = new Map()
+
+  constructor(events: DomainEvent[]) {
+    for (const event of events) {
+      this.apply(event)
+    }
+  }
+
+  apply(event: DomainEvent) {
+    if (event instanceof ScreenScheduled) {
+      this.availableSeats.set(event.screenId, event.seats)
+    }
+
+    if (event instanceof SeatReserved) {
+      const availableSeatsByScreen = this.availableSeats.get(event.screenId)!
+
+      this.availableSeats.set(event.screenId,
+        availableSeatsByScreen.filter(s => !s.equals(event.seat)))
+    }
+  }
+}
+
+// DTO
+export class GetAvailableSeatsResponse {
+
+  public availableSeats: Seat[]
+  public screenId: ScreenId
+
+  constructor(screenId: ScreenId, availableSeats?: Seat[]) {
+    this.screenId = screenId
+    this.availableSeats = availableSeats ?? []
+  }
+}
+
+

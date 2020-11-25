@@ -1,5 +1,5 @@
 import { Command, ReserveSeat } from "../domain/commands"
-import { CustomerId, ScreenId, Seat, ReservationState, Reservation } from "../domain/domain"
+import { ScreenId, Seat, ReservationState, Reservation, CustomerId } from "../domain/domain"
 import { EventStore } from "./event_store"
 
 
