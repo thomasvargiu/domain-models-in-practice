@@ -1,31 +1,27 @@
 import { Query, GetAvailableSeats } from "../domain/queries"
-import { AvailableSeatsByScreen, GetAvailableSeatsResponse, ScreenId } from "../domain/domain"
-import { EventStore } from "./event_store"
+import { AvailableSeatsByScreen, GetAvailableSeatsResponse, QueryResponse } from "../domain/read_models"
+import { ScreenId } from "../domain/domain"
 
 // Query Handler
-export interface QueryHandler<T extends Query> {
-  handleQuery(query: T): void;
+export interface QueryHandler {
+  handleQuery(query: Query): void;
 }
 
 
-export class GetAvailableSeatsHandler implements QueryHandler<GetAvailableSeats> {
-  private eventStore: EventStore
-  private respond: (response: Object) => void
+export class GetAvailableSeatsHandler implements QueryHandler {
+  private readModel: AvailableSeatsByScreen
+  private respond: (response: QueryResponse) => void
 
-  constructor(eventStore: EventStore, respond: (response: Object) => void) {
-    this.eventStore = eventStore
+  constructor(readModel: AvailableSeatsByScreen, respond: (response: QueryResponse) => void) {
+    this.readModel = readModel
     this.respond = respond
   }
 
   handleQuery(query: GetAvailableSeats): void {
     const screenId = new ScreenId(query.screenId)
-  
-    const events = this.eventStore.byScreenId(screenId)
+    const queryResponse = new GetAvailableSeatsResponse(screenId,
+      this.readModel.getAvailableSeats(screenId))
 
-    const readModel = new AvailableSeatsByScreen(events)
-
-    this.respond(
-      new GetAvailableSeatsResponse(screenId, 
-        readModel.availableSeats.get(screenId)))
+    this.respond(queryResponse)
   }
 }

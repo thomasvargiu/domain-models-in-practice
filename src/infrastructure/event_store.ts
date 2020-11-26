@@ -2,10 +2,10 @@ import { DomainEvent, ScreenScheduled, SeatReserved, SeatReservationRefused } fr
 import { ScreenId, CustomerId } from "../domain/domain"
 
 export class EventStore {
-  events: DomainEvent[]
+  private events: DomainEvent[] = []
 
-  constructor(events: DomainEvent[] = []) {
-    this.events = events
+  store(events: DomainEvent[]): void {
+    events.forEach(e => this.events.push(e))
   }
 
   byScreenId(screenId: ScreenId) {

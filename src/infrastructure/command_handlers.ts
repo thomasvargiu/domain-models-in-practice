@@ -4,11 +4,11 @@ import { EventStore } from "./event_store"
 
 
 // Command Handler
-export interface CommandHandler<T extends Command> {
-  handleCommand(command: T): void;
+export interface CommandHandler {
+  handleCommand(command: Command): void;
 }
 
-export class ReserveSeatHandler implements CommandHandler<ReserveSeat> {
+export class ReserveSeatHandler implements CommandHandler {
   private eventStore: EventStore
   private publish: (event: Object) => void
 

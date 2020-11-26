@@ -1,38 +1,75 @@
 import { expect } from "chai";
 import { DomainEvent } from "../src/domain/events";
 import { Command } from "../src/domain/commands";
-import { CommandHandler } from "../src/infrastructure/command_handlers";
+import { CommandHandler, ReserveSeatHandler } from "../src/infrastructure/command_handlers";
+import { QueryHandler, GetAvailableSeatsHandler } from "../src/infrastructure/query_handlers";
+import { EventStore } from "../src/infrastructure/event_store";
+import { EventBus } from "../src/infrastructure/event_bus";
+import { ReadModel, AvailableSeatsByScreen, QueryResponse } from "../src/domain/read_models";
+import { Query } from "../src/domain/queries";
 
-type Publish = (event: DomainEvent) => void;
-type HandlerFactory<T> = (history: DomainEvent[], publish: Publish) => CommandHandler<T>
-
-export interface Framework<T extends Command> {
+export interface Framework {
   readonly given: (events: DomainEvent[]) => void;
-  readonly when: (command: T) => void
+  readonly when: (command: Command) => void
+  readonly whenQuery: (query: Query) => void
   readonly thenExpect: (events: DomainEvent[]) => void
+  readonly thenExpectResponse: (responses: QueryResponse[]) => void
 }
 
-export type FrameworkFactory = <T extends Command>(handlerFactory: HandlerFactory<T>) => Framework<T>
-export const createFramework: FrameworkFactory = <T>(handlerFactory: HandlerFactory<T>) => {
-  let history: DomainEvent[] = [];
-  const publishedEvents: DomainEvent[] = [];
+export class FrameworkFactory {
 
-  return {
-    given: (events: DomainEvent[]): void => {
-      history = events
-    },
-    when: (command: T): void => {
-      const handler = handlerFactory(history, (event) => {
-        publishedEvents.push(event)
-      })
-      handler.handleCommand(command)
-    },
-    thenExpect(events: DomainEvent[]) {
-      publishedEvents.forEach((_el, idx) => {
-        expect(publishedEvents[idx].constructor).to.be.eql(events[idx].constructor)  
-        expect(publishedEvents[idx]).to.be.eql(events[idx])  
+  static createFramework() : Framework {
+
+    const eventStore: EventStore = new EventStore()
+    const eventBus: EventBus = new EventBus()
+    const readModels: ReadModel[] = []
+    const commandHandlers: CommandHandler[] = []
+    const queryHandlers: QueryHandler[] = []
+    const queryResponses: QueryResponse[] = []
+
+
+    return {  
+
+      given(events: DomainEvent[]): void {
+        eventStore.store(events)
+        readModels.push(new AvailableSeatsByScreen(events))
+      },
+
+      when(command: Command): void {
+        commandHandlers.push(new ReserveSeatHandler(eventStore, (event: DomainEvent) => {
+            eventBus.publish(event)
+            readModels.forEach(rm => rm.project(event))
+          }
+        ))
+
+        commandHandlers.forEach(h => h.handleCommand(command))
+      },
+
+      whenQuery(query: Query): void {
         
-      })
+        queryHandlers.push(new GetAvailableSeatsHandler(
+          readModels.find(rm => rm instanceof AvailableSeatsByScreen) as AvailableSeatsByScreen, 
+          (response) => { queryResponses.push(response) }))
+
+        queryHandlers.forEach(h => h.handleQuery(query))
+      },
+
+      thenExpect(events: DomainEvent[]) {
+        const publishedEvents = eventBus.getPublishedEvents()
+
+        publishedEvents.forEach((publishedEvent, idx) => {
+          expect(publishedEvent.constructor).to.be.eql(events[idx].constructor)  
+          expect(publishedEvent).to.be.eql(events[idx])    
+        })
+      },
+
+      thenExpectResponse(responses: QueryResponse[]) {
+        
+        queryResponses.forEach((queryResponse, idx) => {
+          expect(queryResponse.constructor).to.be.eql(responses[idx].constructor)
+          expect(queryResponse).to.be.eql(responses[idx])
+        })
+      }
     }
   }
 }
