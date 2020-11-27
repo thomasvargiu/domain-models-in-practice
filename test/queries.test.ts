@@ -23,7 +23,7 @@ describe("The customer wants to see the available seats of the screening", () =>
     framework = FrameworkFactory.createFramework()
   })
 
-  it.only("If available, the seats should be listed.", async () => {
+  it("If seats are available, the seats should be listed.", async () => {
     const screenStartTime = new Date();
     const screenId = new ScreenId('screen1')
     const screenId2 = new ScreenId('screen2')

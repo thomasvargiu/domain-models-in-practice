@@ -26,7 +26,7 @@ export class AvailableSeatsByScreen implements ReadModel {
     }
 
     if (event instanceof SeatReserved) {
-      const availableSeatsByScreen = this.availableSeats.get(event.screenId)!
+      const availableSeatsByScreen = this.getAvailableSeats(event.screenId)
 
       this.availableSeats.set(event.screenId,
         availableSeatsByScreen.filter(s => !s.equals(event.seat)))
